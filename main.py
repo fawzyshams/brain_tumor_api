@@ -13,24 +13,17 @@ app = FastAPI()
 # Config
 # ======================
 MODEL_PATH = "model.h5"
-
-# تحميل الموديل لو مش موجود
-if not os.path.exists(MODEL_PATH):
-
-    url = "https://drive.google.com/uc?id=1MydwW_aiPfoJOvU48DDioSHv3ghR_25h"
-
-    gdown.download(url, MODEL_PATH, quiet=False)
-
-# تحميل الموديل
-model = tf.keras.models.load_model(MODEL_PATH)
 IMAGE_SIZE = (224, 224)
-
 CLASS_NAMES = ["glioma", "meningioma", "notumor", "pituitary"]
 MAX_IMAGES = 10
 
 # ======================
-# Load Model
+# Download & Load Model
 # ======================
+if not os.path.exists(MODEL_PATH):
+    url = "https://drive.google.com/uc?id=1MydwW_aiPfoJOvU48DDioSHv3ghR_25h"
+    gdown.download(url, MODEL_PATH, quiet=False)
+
 model = tf.keras.models.load_model(MODEL_PATH)
 
 # ======================
@@ -46,40 +39,29 @@ def preprocess_image(image_bytes):
     except Exception:
         return None
 
-
 # ======================
 # Home Route
 # ======================
 @app.get("/")
 def home():
-    return {
-        "message": "AI Model API is running"
-    }
-
+    return {"message": "AI Model API is running"}
 
 # ======================
 # Predict Endpoint
 # ======================
 @app.post("/predict")
 async def predict(files: Annotated[List[UploadFile], File()]):
-
-    # check max images
     if len(files) > MAX_IMAGES:
         return {"error": f"Maximum {MAX_IMAGES} images allowed"}
 
     processed_images = []
-
     for file in files:
-
         if not file.content_type.startswith("image/"):
             return {"error": f"{file.filename} is not an image"}
-
         image_bytes = await file.read()
         img = preprocess_image(image_bytes)
-
         if img is None:
             return {"error": f"Invalid image: {file.filename}"}
-
         processed_images.append(img)
 
     batch = np.array(processed_images)
@@ -92,3 +74,11 @@ async def predict(files: Annotated[List[UploadFile], File()]):
         "prediction": CLASS_NAMES[class_index],
         "confidence": round(confidence * 100, 2)
     }
+
+# ======================
+# Run Server
+# ======================
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
